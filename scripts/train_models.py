@@ -30,7 +30,9 @@ log = logging.getLogger("train")
 def log_system_info():
     log.info(f"XGBoost version: {xgb.__version__}")
     try:
-        out = subprocess.check_output(["nvidia-smi", "-L"], text=True, stderr=subprocess.STDOUT, timeout=5)
+        out = subprocess.check_output(
+            ["nvidia-smi", "-L"], text=True, stderr=subprocess.STDOUT, timeout=5
+        )
         log.info("nvidia-smi -L:")
         for line in out.strip().splitlines():
             log.info(f"  {line}")
@@ -69,12 +71,22 @@ def make_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     for w in windows:
         df[f"kwh_ma{w}"] = df["kwh"].rolling(window=w, min_periods=max(3, w // 2)).mean().shift(1)
 
+    # Extra historik-signal (brukar hjälpa)
+    for span in (7, 14, 28):
+        df[f"kwh_ewm{span}"] = df["kwh"].shift(1).ewm(span=span, adjust=False).mean()
+        df[f"kwh_std{span}"] = df["kwh"].shift(1).rolling(window=span, min_periods=max(3, span // 2)).std()
+
     # Interaktion (brukar hjälpa lite)
     if "shortwave_radiation_sum" in df.columns:
         df["rad_x_daylight"] = df["shortwave_radiation_sum"] * df["daylight_h"]
 
     base_cols = ["dow", "doy", "sin_doy", "cos_doy", "daylight_h"]
-    hist_cols = [f"kwh_lag{lag}" for lag in lags] + [f"kwh_ma{w}" for w in windows]
+    hist_cols = (
+        [f"kwh_lag{lag}" for lag in lags]
+        + [f"kwh_ma{w}" for w in windows]
+        + [f"kwh_ewm{span}" for span in (7, 14, 28)]
+        + [f"kwh_std{span}" for span in (7, 14, 28)]
+    )
     weather_cols = list(CFG.weather_daily_vars)
 
     feature_cols = base_cols + hist_cols + weather_cols
@@ -117,6 +129,21 @@ def apply_calibration(y_pred: np.ndarray, a: float, b: float) -> np.ndarray:
     return np.clip(y, 0.0, None)
 
 
+# -----------------------
+# Custom eval: early stopping på MAE i kWh (inte log-domän)
+# -----------------------
+def mae_kwh_from_logpred(predt: np.ndarray, dmat: xgb.DMatrix):
+    """
+    predt: pred i log1p(kWh)
+    label: true i log1p(kWh)
+    Returnerar MAE i kWh, så early stopping optimerar rätt sak.
+    """
+    y_true_log = dmat.get_label()
+    y_true = np.expm1(y_true_log)
+    y_pred = np.expm1(predt)
+    return "mae_kwh", float(np.mean(np.abs(y_true - y_pred)))
+
+
 def train_booster_log1p(
     X_tr: pd.DataFrame,
     y_tr_kwh: np.ndarray,
@@ -131,7 +158,7 @@ def train_booster_log1p(
     verbose_eval: int = 0,
 ):
     """
-    Träna booster på log1p(kWh), med early stopping på eval-set.
+    Träna booster på log1p(kWh), med early stopping på MAE i kWh.
     device: "cpu" eller "cuda"
     """
     y_tr_log = np.log1p(np.asarray(y_tr_kwh, dtype=float))
@@ -142,15 +169,30 @@ def train_booster_log1p(
 
     params_dev = dict(params)
     params_dev["device"] = device
+    params_dev["disable_default_eval_metric"] = 1  # undvik default metrics i log-domän
 
-    booster = xgb.train(
-        params=params_dev,
-        dtrain=dtrain,
-        num_boost_round=num_round,
-        evals=[(dval, "val")],
-        early_stopping_rounds=es_rounds,
-        verbose_eval=verbose_eval,
-    )
+    # XGBoost >= 2.0: custom_metric, annars fallback feval
+    try:
+        booster = xgb.train(
+            params=params_dev,
+            dtrain=dtrain,
+            num_boost_round=num_round,
+            evals=[(dval, "val")],
+            early_stopping_rounds=es_rounds,
+            custom_metric=mae_kwh_from_logpred,
+            verbose_eval=verbose_eval,
+        )
+    except TypeError:
+        booster = xgb.train(
+            params=params_dev,
+            dtrain=dtrain,
+            num_boost_round=num_round,
+            evals=[(dval, "val")],
+            early_stopping_rounds=es_rounds,
+            feval=mae_kwh_from_logpred,
+            verbose_eval=verbose_eval,
+        )
+
     return booster
 
 
@@ -188,10 +230,18 @@ def plot_mae_vs_threshold(rows: list[dict], out_png: str, out_csv: str):
 
 def parse_args():
     p = argparse.ArgumentParser(description="Träna PV-modell (LOW/HIGH split) med threshold-scan och logging.")
-    p.add_argument("--verbose-eval", type=int, default=0,
-                   help="XGBoost verbose_eval. 0 = tyst. T.ex. 200 för progress.")
-    p.add_argument("--holdout", type=int, default=60,
-                   help="Antal dagar i holdout (val). Default 60.")
+    p.add_argument(
+        "--verbose-eval",
+        type=int,
+        default=0,
+        help="XGBoost verbose_eval. 0 = tyst. T.ex. 200 för progress.",
+    )
+    p.add_argument(
+        "--holdout",
+        type=int,
+        default=60,
+        help="Antal dagar i holdout (val). Default 60.",
+    )
     return p.parse_args()
 
 
@@ -231,7 +281,7 @@ def main():
     # Stabil params (bra baseline)
     params = {
         "objective": "reg:squarederror",
-        "eval_metric": "mae",
+        # eval_metric sätts via custom metric (kWh), så vi skippar log-mae här
         "tree_method": "hist",
         "learning_rate": 0.03,
         "max_depth": 4,
@@ -268,22 +318,39 @@ def main():
         y_val_high = (va_high["kwh"].values if len(va_high) >= 10 else val_df["kwh"].values)
 
         booster_low = train_booster_log1p(
-            tr_low[feature_cols], tr_low["kwh"].values,
-            X_val_low, y_val_low,
-            feature_cols, params, num_round, es_rounds,
+            tr_low[feature_cols],
+            tr_low["kwh"].values,
+            X_val_low,
+            y_val_low,
+            feature_cols,
+            params,
+            num_round,
+            es_rounds,
             tag=f"LOW thr={thr:.2f}",
             device=device,
             verbose_eval=verbose_eval,
         )
 
         booster_high = train_booster_log1p(
-            tr_high[feature_cols], tr_high["kwh"].values,
-            X_val_high, y_val_high,
-            feature_cols, params, num_round, es_rounds,
+            tr_high[feature_cols],
+            tr_high["kwh"].values,
+            X_val_high,
+            y_val_high,
+            feature_cols,
+            params,
+            num_round,
+            es_rounds,
             tag=f"HIGH thr={thr:.2f}",
             device=device,
             verbose_eval=verbose_eval,
         )
+
+        # Extra logg som visar att den verkligen tränar
+        try:
+            log.info(f"  LOW  best_iter={booster_low.best_iteration} best_score={booster_low.best_score}")
+            log.info(f"  HIGH best_iter={booster_high.best_iteration} best_score={booster_high.best_score}")
+        except Exception:
+            pass
 
         # Score på hela holdout
         X_val_all = val_df[feature_cols]
@@ -300,11 +367,14 @@ def main():
 
     best = None
     coarse_rows = []
-    for p, thr in zip(coarse_pcts, coarse_thrs):
+    for i, (p, thr) in enumerate(zip(coarse_pcts, coarse_thrs), 1):
+        log.info(f"[Coarse {i}/{len(coarse_thrs)}] pct={p} thr={thr:.2f}")
         t_thr = time.time()
         score, bl, bh = eval_thr(thr)
-        coarse_rows.append({"phase": "coarse", "pct": p, "thr": thr, "mae": score, "seconds": round(time.time()-t_thr, 2)})
-        log.info(f"Coarse thr={thr:.2f} (pct={p}) | MAE={score:.3f} | {time.time()-t_thr:.1f}s")
+        coarse_rows.append(
+            {"phase": "coarse", "pct": p, "thr": thr, "mae": score, "seconds": round(time.time() - t_thr, 2)}
+        )
+        log.info(f"Coarse thr={thr:.2f} (pct={p}) | MAE={score:.3f} | {time.time() - t_thr:.1f}s")
         if best is None or score < best["mae"]:
             best = {"thr": float(thr), "mae": float(score), "booster_low": bl, "booster_high": bh}
             log.info(f"✅ Ny bästa (coarse): thr={thr:.2f} | MAE={score:.3f}")
@@ -317,11 +387,14 @@ def main():
     log.info(f"Fine scan runt pct≈{best_pct:.1f}: percentiler {fine_pcts[0]}..{fine_pcts[-1]}")
 
     fine_rows = []
-    for p, thr in zip(fine_pcts, fine_thrs):
+    for i, (p, thr) in enumerate(zip(fine_pcts, fine_thrs), 1):
+        log.info(f"[Fine {i}/{len(fine_thrs)}] pct={p} thr={thr:.2f}")
         t_thr = time.time()
         score, bl, bh = eval_thr(thr)
-        fine_rows.append({"phase": "fine", "pct": p, "thr": thr, "mae": score, "seconds": round(time.time()-t_thr, 2)})
-        log.info(f"Fine thr={thr:.2f} (pct={p}) | MAE={score:.3f} | {time.time()-t_thr:.1f}s")
+        fine_rows.append(
+            {"phase": "fine", "pct": p, "thr": thr, "mae": score, "seconds": round(time.time() - t_thr, 2)}
+        )
+        log.info(f"Fine thr={thr:.2f} (pct={p}) | MAE={score:.3f} | {time.time() - t_thr:.1f}s")
         if score < best["mae"]:
             best = {"thr": float(thr), "mae": float(score), "booster_low": bl, "booster_high": bh}
             log.info(f"✅ Ny bästa (fine): thr={thr:.2f} | MAE={score:.3f}")
@@ -357,8 +430,7 @@ def main():
         out_csv=os.path.join("plots", "mae_vs_threshold.csv"),
     )
 
-    # Retrain final på all data med best boosters (enkelt: spara dem direkt)
-    # (vill du retraina med "best_iteration" kan vi lägga till, men detta räcker ofta)
+    # Spara modell
     out_path = os.path.join(CFG.models_dir, "TOTAL.joblib")
     joblib.dump(
         {
@@ -371,6 +443,7 @@ def main():
             "calibration_high": {"a": a_high, "b": b_high},
             "weather_cols": list(CFG.weather_daily_vars),
             "train_device": device,
+            "early_stopping_metric": "mae_kwh",
         },
         out_path,
     )
@@ -385,13 +458,14 @@ def main():
         "val_MAE_cal_kwh": float(mae_cal),
         "model_file": out_path,
         "threshold_scan_rows": rows,
+        "feature_count": int(len(feature_cols)),
     }
     with open(os.path.join(CFG.models_dir, "model_report_total.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
 
     log.info(f"Sparade modell: {out_path}")
     log.info(f"Vald threshold={thr:.2f} | val_MAE_raw={mae_raw:.3f} | val_MAE_cal={mae_cal:.3f} | device={device}")
-    log.info(f"Klart. Total tid: {time.time()-t0:.1f}s")
+    log.info(f"Klart. Total tid: {time.time() - t0:.1f}s")
 
 
 if __name__ == "__main__":
