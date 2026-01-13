@@ -188,8 +188,6 @@ def plot_mae_vs_threshold(rows: list[dict], out_png: str, out_csv: str):
 
 def parse_args():
     p = argparse.ArgumentParser(description="Träna PV-modell (LOW/HIGH split) med threshold-scan och logging.")
-    p.add_argument("--device", choices=["cpu", "cuda", "auto"], default="auto",
-                   help="Välj träningsenhet. auto=försök cuda, annars cpu.")
     p.add_argument("--verbose-eval", type=int, default=0,
                    help="XGBoost verbose_eval. 0 = tyst. T.ex. 200 för progress.")
     p.add_argument("--holdout", type=int, default=60,
@@ -204,23 +202,9 @@ def main():
     args = parse_args()
     log_system_info()
 
-    # device resolution
-    device = args.device
-    if device == "auto":
-        # prova ett minimalt kommando för att se om cuda funkar
-        try:
-            _ = xgb.train(
-                params={"objective": "reg:squarederror", "tree_method": "hist", "device": "cuda"},
-                dtrain=xgb.DMatrix(np.random.randn(10, 3), label=np.random.randn(10)),
-                num_boost_round=1,
-                evals=[],
-                verbose_eval=False,
-            )
-            device = "cuda"
-        except Exception:
-            device = "cpu"
-
-    log.info(f"Vald device: {device}")
+    device = "cpu"
+    cpu_threads = int(os.environ.get("XGBOOST_NUM_THREADS", os.cpu_count() or 1))
+    log.info(f"Vald device: {device} | CPU-trådar: {cpu_threads}")
     t0 = time.time()
     log.info("Startar träning: SPLIT (LOW/HIGH) + threshold-scan + MAE-graf + kalibrering")
 
@@ -258,6 +242,7 @@ def main():
         "alpha": 1.0,
         "gamma": 0.5,
         "seed": 42,
+        "nthread": cpu_threads,
     }
     num_round = 8000
     es_rounds = 300
