@@ -153,13 +153,11 @@ def train_booster_log1p(
     params: dict,
     num_round: int,
     es_rounds: int,
-    tag: str,
     device: str,
     verbose_eval: int = 0,
 ):
     """
     Träna booster på log1p(kWh), med early stopping på MAE i kWh.
-    device: "cpu" eller "cuda"
     """
     y_tr_log = np.log1p(np.asarray(y_tr_kwh, dtype=float))
     y_val_log = np.log1p(np.asarray(y_val_kwh, dtype=float))
@@ -193,6 +191,35 @@ def train_booster_log1p(
             verbose_eval=verbose_eval,
         )
 
+    return booster
+
+
+def retrain_final_booster_log1p(
+    X_all: pd.DataFrame,
+    y_all_kwh: np.ndarray,
+    feature_cols: list[str],
+    params: dict,
+    device: str,
+    num_round: int,
+):
+    """
+    Retraina final-booster på ALL data med fast num_boost_round (best_iter+1).
+    Ingen early stopping (för att nyttja all data).
+    """
+    y_all_log = np.log1p(np.asarray(y_all_kwh, dtype=float))
+    dtrain = xgb.DMatrix(X_all, label=y_all_log, feature_names=feature_cols)
+
+    params_dev = dict(params)
+    params_dev["device"] = device
+    params_dev["disable_default_eval_metric"] = 1
+
+    booster = xgb.train(
+        params=params_dev,
+        dtrain=dtrain,
+        num_boost_round=int(num_round),
+        evals=[],
+        verbose_eval=False,
+    )
     return booster
 
 
@@ -242,6 +269,12 @@ def parse_args():
         default=60,
         help="Antal dagar i holdout (val). Default 60.",
     )
+    p.add_argument(
+        "--calib-days",
+        type=int,
+        default=0,
+        help="Om >0: sista N dagar av holdout används för kalibrering (threshold väljs på resterande holdout).",
+    )
     return p.parse_args()
 
 
@@ -256,7 +289,7 @@ def main():
     cpu_threads = int(os.environ.get("XGBOOST_NUM_THREADS", os.cpu_count() or 1))
     log.info(f"Vald device: {device} | CPU-trådar: {cpu_threads}")
     t0 = time.time()
-    log.info("Startar träning: SPLIT (LOW/HIGH) + threshold-scan + MAE-graf + kalibrering")
+    log.info("Startar träning: SPLIT (LOW/HIGH) + threshold-scan + MAE-graf + kalibrering + FINAL retrain")
 
     prod = pd.read_csv("data/production_total.csv", parse_dates=["date"]).sort_values("date")
     weather = pd.read_csv(CFG.weather_historical_path, parse_dates=["date"]).sort_values("date")
@@ -272,7 +305,19 @@ def main():
     holdout = min(args.holdout, max(21, int(0.2 * len(data))))
     train_df = data.iloc[:-holdout].copy()
     val_df = data.iloc[-holdout:].copy()
-    log.info(f"Holdout={holdout} | Train={len(train_df)} | Val={len(val_df)}")
+    log.info(f"Holdout={holdout} | Train={len(train_df)} | Holdout(total)={len(val_df)}")
+
+    # (Valfritt) dela holdout i val_select + calib
+    calib_days = int(args.calib_days or 0)
+    if calib_days > 0 and calib_days < max(10, len(val_df) - 10):
+        val_select_df = val_df.iloc[:-calib_days].copy()
+        calib_df = val_df.iloc[-calib_days:].copy()
+        log.info(f"Holdout split: select={len(val_select_df)} | calib={len(calib_df)} (calib_days={calib_days})")
+    else:
+        val_select_df = val_df.copy()
+        calib_df = val_df.copy()
+        if calib_days > 0:
+            log.warning("calib-days ignoreras (för stort eller för litet för nuvarande holdout).")
 
     rad_col = "shortwave_radiation_sum"
     if rad_col not in train_df.columns:
@@ -281,7 +326,6 @@ def main():
     # Stabil params (bra baseline)
     params = {
         "objective": "reg:squarederror",
-        # eval_metric sätts via custom metric (kWh), så vi skippar log-mae här
         "tree_method": "hist",
         "learning_rate": 0.03,
         "max_depth": 4,
@@ -307,15 +351,15 @@ def main():
     def eval_thr(thr: float):
         tr_low = train_df[train_df[rad_col] <= thr]
         tr_high = train_df[train_df[rad_col] > thr]
-        va_low = val_df[val_df[rad_col] <= thr]
-        va_high = val_df[val_df[rad_col] > thr]
+        va_low = val_select_df[val_select_df[rad_col] <= thr]
+        va_high = val_select_df[val_select_df[rad_col] > thr]
 
-        # Eval-set per del (om för liten, använd hela val)
-        X_val_low = (va_low[feature_cols] if len(va_low) >= 10 else val_df[feature_cols])
-        y_val_low = (va_low["kwh"].values if len(va_low) >= 10 else val_df["kwh"].values)
+        # Eval-set per del (om för liten, använd hela val_select)
+        X_val_low = (va_low[feature_cols] if len(va_low) >= 10 else val_select_df[feature_cols])
+        y_val_low = (va_low["kwh"].values if len(va_low) >= 10 else val_select_df["kwh"].values)
 
-        X_val_high = (va_high[feature_cols] if len(va_high) >= 10 else val_df[feature_cols])
-        y_val_high = (va_high["kwh"].values if len(va_high) >= 10 else val_df["kwh"].values)
+        X_val_high = (va_high[feature_cols] if len(va_high) >= 10 else val_select_df[feature_cols])
+        y_val_high = (va_high["kwh"].values if len(va_high) >= 10 else val_select_df["kwh"].values)
 
         booster_low = train_booster_log1p(
             tr_low[feature_cols],
@@ -326,7 +370,6 @@ def main():
             params,
             num_round,
             es_rounds,
-            tag=f"LOW thr={thr:.2f}",
             device=device,
             verbose_eval=verbose_eval,
         )
@@ -340,27 +383,26 @@ def main():
             params,
             num_round,
             es_rounds,
-            tag=f"HIGH thr={thr:.2f}",
             device=device,
             verbose_eval=verbose_eval,
         )
 
-        # Extra logg som visar att den verkligen tränar
+        # logga att den tränar och var den stannade
         try:
             log.info(f"  LOW  best_iter={booster_low.best_iteration} best_score={booster_low.best_score}")
             log.info(f"  HIGH best_iter={booster_high.best_iteration} best_score={booster_high.best_score}")
         except Exception:
             pass
 
-        # Score på hela holdout
-        X_val_all = val_df[feature_cols]
-        rad_val = val_df[rad_col].values.astype(float)
-        y_true = val_df["kwh"].values.astype(float)
+        # Score på val_select (för threshold-val)
+        X_va = val_select_df[feature_cols]
+        rad_va = val_select_df[rad_col].values.astype(float)
+        y_true = val_select_df["kwh"].values.astype(float)
 
-        pred_low = predict_kwh_from_booster(booster_low, X_val_all, feature_cols)
-        pred_high = predict_kwh_from_booster(booster_high, X_val_all, feature_cols)
+        pred_low = predict_kwh_from_booster(booster_low, X_va, feature_cols)
+        pred_high = predict_kwh_from_booster(booster_high, X_va, feature_cols)
 
-        y_pred = np.where(rad_val <= thr, pred_low, pred_high)
+        y_pred = np.where(rad_va <= thr, pred_low, pred_high)
         score = mae(y_true, y_pred)
 
         return score, booster_low, booster_high
@@ -399,28 +441,81 @@ def main():
             best = {"thr": float(thr), "mae": float(score), "booster_low": bl, "booster_high": bh}
             log.info(f"✅ Ny bästa (fine): thr={thr:.2f} | MAE={score:.3f}")
 
-    # Kalibrering på holdout
     thr = best["thr"]
-    X_val_all = val_df[feature_cols]
-    y_true = val_df["kwh"].values.astype(float)
-    rad_val = val_df[rad_col].values.astype(float)
 
-    pred_low = predict_kwh_from_booster(best["booster_low"], X_val_all, feature_cols)
-    pred_high = predict_kwh_from_booster(best["booster_high"], X_val_all, feature_cols)
-    y_pred_raw = np.where(rad_val <= thr, pred_low, pred_high)
+    # -----------------------
+    # Kalibrering (fit på calib_df)
+    # -----------------------
+    X_cal = calib_df[feature_cols]
+    y_cal_true = calib_df["kwh"].values.astype(float)
+    rad_cal = calib_df[rad_col].values.astype(float)
 
-    idx_low = rad_val <= thr
+    pred_low_cal = predict_kwh_from_booster(best["booster_low"], X_cal, feature_cols)
+    pred_high_cal = predict_kwh_from_booster(best["booster_high"], X_cal, feature_cols)
+    y_cal_pred_raw = np.where(rad_cal <= thr, pred_low_cal, pred_high_cal)
+
+    idx_low = rad_cal <= thr
     idx_high = ~idx_low
 
-    a_low, b_low = fit_linear_calibration(y_pred_raw[idx_low], y_true[idx_low]) if np.any(idx_low) else (1.0, 0.0)
-    a_high, b_high = fit_linear_calibration(y_pred_raw[idx_high], y_true[idx_high]) if np.any(idx_high) else (1.0, 0.0)
+    a_low, b_low = fit_linear_calibration(y_cal_pred_raw[idx_low], y_cal_true[idx_low]) if np.any(idx_low) else (1.0, 0.0)
+    a_high, b_high = fit_linear_calibration(y_cal_pred_raw[idx_high], y_cal_true[idx_high]) if np.any(idx_high) else (1.0, 0.0)
 
-    y_pred_cal = y_pred_raw.copy()
-    y_pred_cal[idx_low] = apply_calibration(y_pred_raw[idx_low], a_low, b_low)
-    y_pred_cal[idx_high] = apply_calibration(y_pred_raw[idx_high], a_high, b_high)
+    y_cal_pred_cal = y_cal_pred_raw.copy()
+    y_cal_pred_cal[idx_low] = apply_calibration(y_cal_pred_raw[idx_low], a_low, b_low)
+    y_cal_pred_cal[idx_high] = apply_calibration(y_cal_pred_raw[idx_high], a_high, b_high)
 
-    mae_raw = mae(y_true, y_pred_raw)
-    mae_cal = mae(y_true, y_pred_cal)
+    calib_mae_raw = mae(y_cal_true, y_cal_pred_raw)
+    calib_mae_cal = mae(y_cal_true, y_cal_pred_cal)
+
+    # -----------------------
+    # Utvärdera på hela holdout (val_df) med kalibrering som fitted ovan
+    # -----------------------
+    X_hold = val_df[feature_cols]
+    y_hold_true = val_df["kwh"].values.astype(float)
+    rad_hold = val_df[rad_col].values.astype(float)
+
+    pred_low_hold = predict_kwh_from_booster(best["booster_low"], X_hold, feature_cols)
+    pred_high_hold = predict_kwh_from_booster(best["booster_high"], X_hold, feature_cols)
+    y_hold_pred_raw = np.where(rad_hold <= thr, pred_low_hold, pred_high_hold)
+
+    idx_low_h = rad_hold <= thr
+    idx_high_h = ~idx_low_h
+
+    y_hold_pred_cal = y_hold_pred_raw.copy()
+    y_hold_pred_cal[idx_low_h] = apply_calibration(y_hold_pred_raw[idx_low_h], a_low, b_low)
+    y_hold_pred_cal[idx_high_h] = apply_calibration(y_hold_pred_raw[idx_high_h], a_high, b_high)
+
+    holdout_mae_raw = mae(y_hold_true, y_hold_pred_raw)
+    holdout_mae_cal = mae(y_hold_true, y_hold_pred_cal)
+
+    # -----------------------
+    # FINAL retrain på ALL data med best_iteration+1
+    # -----------------------
+    best_iter_low = int(getattr(best["booster_low"], "best_iteration", 0))
+    best_iter_high = int(getattr(best["booster_high"], "best_iteration", 0))
+    final_rounds_low = max(1, best_iter_low + 1)
+    final_rounds_high = max(1, best_iter_high + 1)
+
+    all_low = data[data[rad_col] <= thr]
+    all_high = data[data[rad_col] > thr]
+
+    log.info(f"Final retrain: LOW rounds={final_rounds_low} | HIGH rounds={final_rounds_high}")
+    final_low = retrain_final_booster_log1p(
+        all_low[feature_cols],
+        all_low["kwh"].values,
+        feature_cols,
+        params,
+        device=device,
+        num_round=final_rounds_low,
+    )
+    final_high = retrain_final_booster_log1p(
+        all_high[feature_cols],
+        all_high["kwh"].values,
+        feature_cols,
+        params,
+        device=device,
+        num_round=final_rounds_high,
+    )
 
     # Spara graf + csv
     rows = coarse_rows + fine_rows
@@ -430,15 +525,17 @@ def main():
         out_csv=os.path.join("plots", "mae_vs_threshold.csv"),
     )
 
-    # Spara modell
+    # Spara modell (sparar FINAL boosters)
     out_path = os.path.join(CFG.models_dir, "TOTAL.joblib")
     joblib.dump(
         {
-            "booster_low": best["booster_low"],
-            "booster_high": best["booster_high"],
+            "booster_low": final_low,
+            "booster_high": final_high,
             "feature_cols": feature_cols,
             "target_transform": "log1p_split",
             "radiation_threshold": thr,
+            "best_iterations": {"low": best_iter_low, "high": best_iter_high},
+            "final_rounds": {"low": final_rounds_low, "high": final_rounds_high},
             "calibration_low": {"a": a_low, "b": b_low},
             "calibration_high": {"a": a_high, "b": b_high},
             "weather_cols": list(CFG.weather_daily_vars),
@@ -452,10 +549,15 @@ def main():
         "target": "TOTAL",
         "rows_used": int(len(data)),
         "holdout_days": int(holdout),
+        "calib_days": int(calib_days),
         "train_device": device,
         "radiation_threshold": float(thr),
-        "val_MAE_raw_kwh": float(mae_raw),
-        "val_MAE_cal_kwh": float(mae_cal),
+        "best_iterations": {"low": best_iter_low, "high": best_iter_high},
+        "final_rounds": {"low": final_rounds_low, "high": final_rounds_high},
+        "calib_MAE_raw_kwh": float(calib_mae_raw),
+        "calib_MAE_cal_kwh": float(calib_mae_cal),
+        "holdout_MAE_raw_kwh": float(holdout_mae_raw),
+        "holdout_MAE_cal_kwh": float(holdout_mae_cal),
         "model_file": out_path,
         "threshold_scan_rows": rows,
         "feature_count": int(len(feature_cols)),
@@ -464,7 +566,11 @@ def main():
         json.dump(report, f, ensure_ascii=False, indent=2)
 
     log.info(f"Sparade modell: {out_path}")
-    log.info(f"Vald threshold={thr:.2f} | val_MAE_raw={mae_raw:.3f} | val_MAE_cal={mae_cal:.3f} | device={device}")
+    log.info(
+        f"Vald threshold={thr:.2f} | holdout_MAE_raw={holdout_mae_raw:.3f} | holdout_MAE_cal={holdout_mae_cal:.3f} | device={device}"
+    )
+    if calib_days > 0:
+        log.info(f"Kalib (fit-set) MAE_raw={calib_mae_raw:.3f} | MAE_cal={calib_mae_cal:.3f} (OBS fit på calib)")
     log.info(f"Klart. Total tid: {time.time() - t0:.1f}s")
 
 
