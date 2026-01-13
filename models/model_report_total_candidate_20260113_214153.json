@@ -1,0 +1,236 @@
+{
+  "target": "TOTAL",
+  "rows_used": 413,
+  "holdout_days": 60,
+  "calib_days": 5,
+  "train_device": "cpu",
+  "radiation_threshold": 8.6212,
+  "gate_scale": 0.25,
+  "ensemble": 5,
+  "kwh_clip": 35.0,
+  "snow": {
+    "snow_kwh": 0.5,
+    "snow_clear": 0.45,
+    "snow_window": 7
+  },
+  "calib_MAE_raw_kwh": 0.8493905832761035,
+  "calib_MAE_cal_kwh": 0.8493905832761035,
+  "holdout_MAE_raw_kwh": 2.7789886423193533,
+  "holdout_MAE_cal_kwh": 2.7789886423193533,
+  "holdout_MAE_best_kwh": 2.7789886423193533,
+  "calibration_enabled": true,
+  "threshold_scan_rows": [
+    {
+      "phase": "coarse",
+      "pct": 20,
+      "thr": 1.2080000000000002,
+      "mae": 3.333937505075698,
+      "seconds": 1.43
+    },
+    {
+      "phase": "coarse",
+      "pct": 25,
+      "thr": 1.88,
+      "mae": 3.325207676260893,
+      "seconds": 2.11
+    },
+    {
+      "phase": "coarse",
+      "pct": 30,
+      "thr": 3.4059999999999997,
+      "mae": 3.295622247073847,
+      "seconds": 2.92
+    },
+    {
+      "phase": "coarse",
+      "pct": 35,
+      "thr": 4.59,
+      "mae": 3.2993616174721256,
+      "seconds": 1.05
+    },
+    {
+      "phase": "coarse",
+      "pct": 40,
+      "thr": 5.774000000000001,
+      "mae": 2.9850015056703496,
+      "seconds": 1.02
+    },
+    {
+      "phase": "coarse",
+      "pct": 45,
+      "thr": 7.146000000000001,
+      "mae": 2.983751638532663,
+      "seconds": 1.47
+    },
+    {
+      "phase": "coarse",
+      "pct": 50,
+      "thr": 8.34,
+      "mae": 3.0666071950319354,
+      "seconds": 0.91
+    },
+    {
+      "phase": "coarse",
+      "pct": 55,
+      "thr": 9.976000000000003,
+      "mae": 3.052502135152802,
+      "seconds": 0.68
+    },
+    {
+      "phase": "coarse",
+      "pct": 60,
+      "thr": 11.691999999999998,
+      "mae": 3.0806363901285527,
+      "seconds": 0.93
+    },
+    {
+      "phase": "coarse",
+      "pct": 65,
+      "thr": 13.326,
+      "mae": 3.120570401067713,
+      "seconds": 0.7
+    },
+    {
+      "phase": "coarse",
+      "pct": 70,
+      "thr": 15.409999999999998,
+      "mae": 3.2580053132807443,
+      "seconds": 2.19
+    },
+    {
+      "phase": "coarse",
+      "pct": 75,
+      "thr": 17.11,
+      "mae": 3.0716682179000387,
+      "seconds": 2.57
+    },
+    {
+      "phase": "coarse",
+      "pct": 80,
+      "thr": 18.726,
+      "mae": 3.1060324720849906,
+      "seconds": 1.6
+    },
+    {
+      "phase": "fine",
+      "pct": 37,
+      "thr": 4.929200000000001,
+      "mae": 3.1213499972447356,
+      "seconds": 1.69
+    },
+    {
+      "phase": "fine",
+      "pct": 38,
+      "thr": 5.181999999999999,
+      "mae": 3.0454436036555017,
+      "seconds": 1.28
+    },
+    {
+      "phase": "fine",
+      "pct": 39,
+      "thr": 5.5784,
+      "mae": 3.0652695249543522,
+      "seconds": 1.19
+    },
+    {
+      "phase": "fine",
+      "pct": 40,
+      "thr": 5.774000000000001,
+      "mae": 2.9850015056703496,
+      "seconds": 1.08
+    },
+    {
+      "phase": "fine",
+      "pct": 41,
+      "thr": 6.086,
+      "mae": 3.003951967418052,
+      "seconds": 1.29
+    },
+    {
+      "phase": "fine",
+      "pct": 42,
+      "thr": 6.3824000000000005,
+      "mae": 3.005448287244503,
+      "seconds": 1.16
+    },
+    {
+      "phase": "fine",
+      "pct": 43,
+      "thr": 6.488799999999999,
+      "mae": 3.043820274514277,
+      "seconds": 1.48
+    },
+    {
+      "phase": "fine",
+      "pct": 44,
+      "thr": 6.6916,
+      "mae": 2.9449502724876524,
+      "seconds": 1.35
+    },
+    {
+      "phase": "fine",
+      "pct": 45,
+      "thr": 7.146000000000001,
+      "mae": 2.983751638532663,
+      "seconds": 1.55
+    },
+    {
+      "phase": "fine",
+      "pct": 46,
+      "thr": 7.2992,
+      "mae": 2.9363708541245144,
+      "seconds": 0.93
+    },
+    {
+      "phase": "fine",
+      "pct": 47,
+      "thr": 7.7048,
+      "mae": 2.9884993082353932,
+      "seconds": 0.7
+    },
+    {
+      "phase": "fine",
+      "pct": 48,
+      "thr": 8.017199999999999,
+      "mae": 3.0697036731375253,
+      "seconds": 0.9
+    },
+    {
+      "phase": "fine",
+      "pct": 49,
+      "thr": 8.1448,
+      "mae": 3.0217024254760836,
+      "seconds": 0.7
+    },
+    {
+      "phase": "fine",
+      "pct": 50,
+      "thr": 8.34,
+      "mae": 3.0666071950319354,
+      "seconds": 0.96
+    },
+    {
+      "phase": "fine",
+      "pct": 51,
+      "thr": 8.6212,
+      "mae": 2.914793613203322,
+      "seconds": 1.5
+    },
+    {
+      "phase": "fine",
+      "pct": 52,
+      "thr": 8.824800000000003,
+      "mae": 3.055256146114443,
+      "seconds": 0.98
+    },
+    {
+      "phase": "fine",
+      "pct": 53,
+      "thr": 9.0636,
+      "mae": 2.956451602879761,
+      "seconds": 1.7
+    }
+  ],
+  "feature_count": 32,
+  "model_file": "models\\TOTAL_candidate_20260113_214153.joblib"
+}

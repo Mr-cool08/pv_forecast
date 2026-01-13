@@ -1,0 +1,21 @@
+{
+  "target": "TOTAL",
+  "model_file": "models\\TOTAL_RL.pt",
+  "rows_used": 413,
+  "holdout_days": 60,
+  "val_MAE_kwh": 5.586256822074453,
+  "episodes_trained": 50000,
+  "batch_size": 365,
+  "lr": 0.0002,
+  "entropy": 0.01,
+  "baseline_momentum": 0.98,
+  "feature_count": 32,
+  "kwh_clip": 35.0,
+  "snow": {
+    "snow_kwh": 0.5,
+    "snow_clear": 0.45,
+    "snow_window": 7
+  },
+  "train_device": "cpu",
+  "seconds": 141.16951704025269
+}

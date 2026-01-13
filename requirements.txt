@@ -8,3 +8,23 @@ xgboost
 matplotlib
 Flask
 python-dotenv
+
+
+
+# requirements.txt for train_models_rl.py
+
+# Core scientific stack
+numpy
+pandas
+matplotlib
+joblib
+
+# Machine learning
+xgboost
+torch
+# Utility
+argparse
+logging
+
+# Project specific imports (should exist in repo)
+# config.py and scripts/_common.py are internal
