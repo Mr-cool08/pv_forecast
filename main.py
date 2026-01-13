@@ -25,9 +25,21 @@ def download_production_csvs():
     module.main()
 
 
+def has_downloaded_production_files() -> bool:
+    production_dir = Path(CFG.production_raw_dir)
+    if not production_dir.exists():
+        return False
+    return any(path.is_file() for path in production_dir.iterdir())
+
+
 def main():
     print("Steg 1/4: Hämtar mail och laddar ner produktionsfiler...")
-    download_production_csvs()
+    if has_downloaded_production_files():
+        print(
+            f"  - Hoppar över mail-hämtning, filer finns redan i {CFG.production_raw_dir}."
+        )
+    else:
+        download_production_csvs()
 
     print("Steg 2/4: Bygger production_long.csv...")
     build_production_long.main()
