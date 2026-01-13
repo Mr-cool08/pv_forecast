@@ -2,221 +2,221 @@
   "target": "TOTAL",
   "rows_used": 413,
   "holdout_days": 60,
-  "train_device": "cuda",
+  "train_device": "cpu",
   "radiation_threshold": 1.2080000000000002,
-  "val_MAE_raw_kwh": 3.136455084198077,
-  "val_MAE_cal_kwh": 2.9795201506366724,
+  "val_MAE_raw_kwh": 3.1548288077745434,
+  "val_MAE_cal_kwh": 2.9513680074214936,
   "model_file": "models\\TOTAL.joblib",
   "threshold_scan_rows": [
     {
       "phase": "coarse",
       "pct": 20,
       "thr": 1.2080000000000002,
-      "mae": 3.136455084198077,
-      "seconds": 5.03
+      "mae": 3.1548288077745434,
+      "seconds": 1.41
     },
     {
       "phase": "coarse",
       "pct": 25,
       "thr": 1.88,
-      "mae": 3.5745675035196145,
-      "seconds": 5.49
+      "mae": 3.543315726970593,
+      "seconds": 1.66
     },
     {
       "phase": "coarse",
       "pct": 30,
       "thr": 3.4059999999999997,
-      "mae": 3.331652645574887,
-      "seconds": 4.89
+      "mae": 3.3881744801740643,
+      "seconds": 1.64
     },
     {
       "phase": "coarse",
       "pct": 35,
       "thr": 4.59,
-      "mae": 3.457941160764456,
-      "seconds": 5.25
+      "mae": 3.450042011671622,
+      "seconds": 1.27
     },
     {
       "phase": "coarse",
       "pct": 40,
       "thr": 5.774000000000001,
-      "mae": 3.1684361394677953,
-      "seconds": 5.11
+      "mae": 3.21029238731726,
+      "seconds": 1.37
     },
     {
       "phase": "coarse",
       "pct": 45,
       "thr": 7.146000000000001,
-      "mae": 3.2601623165410354,
-      "seconds": 4.08
+      "mae": 3.270131163712501,
+      "seconds": 1.78
     },
     {
       "phase": "coarse",
       "pct": 50,
       "thr": 8.34,
-      "mae": 3.217940993862788,
-      "seconds": 4.5
+      "mae": 3.2301350601582524,
+      "seconds": 1.44
     },
     {
       "phase": "coarse",
       "pct": 55,
       "thr": 9.976000000000003,
-      "mae": 3.1824661909747918,
-      "seconds": 7.7
+      "mae": 3.227854767542203,
+      "seconds": 0.91
     },
     {
       "phase": "coarse",
       "pct": 60,
       "thr": 11.691999999999998,
-      "mae": 3.1813272699367205,
-      "seconds": 5.88
+      "mae": 3.1676743289613722,
+      "seconds": 1.6
     },
     {
       "phase": "coarse",
       "pct": 65,
       "thr": 13.326,
-      "mae": 3.2216961827584902,
-      "seconds": 5.58
+      "mae": 3.2876146029218036,
+      "seconds": 1.36
     },
     {
       "phase": "coarse",
       "pct": 70,
       "thr": 15.409999999999998,
-      "mae": 3.2805767703124675,
-      "seconds": 2.91
+      "mae": 3.2812932353229516,
+      "seconds": 1.23
     },
     {
       "phase": "coarse",
       "pct": 75,
       "thr": 17.11,
-      "mae": 3.305345678791523,
-      "seconds": 2.7
+      "mae": 3.2770860836914375,
+      "seconds": 1.06
     },
     {
       "phase": "coarse",
       "pct": 80,
       "thr": 18.726,
-      "mae": 3.313027964497725,
-      "seconds": 2.85
+      "mae": 3.2693512594710983,
+      "seconds": 0.91
     },
     {
       "phase": "fine",
       "pct": 12,
       "thr": 0.6547999999999999,
-      "mae": 3.408375995465278,
-      "seconds": 5.24
+      "mae": 3.439992383147637,
+      "seconds": 1.85
     },
     {
       "phase": "fine",
       "pct": 13,
       "thr": 0.68,
-      "mae": 3.458413405200163,
-      "seconds": 6.34
+      "mae": 3.5200093318873242,
+      "seconds": 1.58
     },
     {
       "phase": "fine",
       "pct": 14,
       "thr": 0.7228,
-      "mae": 3.6382116809341905,
-      "seconds": 9.46
+      "mae": 3.688452768062909,
+      "seconds": 1.49
     },
     {
       "phase": "fine",
       "pct": 15,
       "thr": 0.76,
-      "mae": 3.560714444417874,
-      "seconds": 8.33
+      "mae": 3.5367722550019423,
+      "seconds": 1.13
     },
     {
       "phase": "fine",
       "pct": 16,
       "thr": 0.8532,
-      "mae": 3.5402514249319634,
-      "seconds": 8.35
+      "mae": 3.5757085893536407,
+      "seconds": 0.85
     },
     {
       "phase": "fine",
       "pct": 17,
       "thr": 0.9452,
-      "mae": 3.4369182498139543,
-      "seconds": 10.47
+      "mae": 3.41752432370011,
+      "seconds": 1.79
     },
     {
       "phase": "fine",
       "pct": 18,
       "thr": 1.0144,
-      "mae": 3.259871145228386,
-      "seconds": 4.49
+      "mae": 3.194366122677803,
+      "seconds": 0.95
     },
     {
       "phase": "fine",
       "pct": 19,
       "thr": 1.1276,
-      "mae": 3.3795539507817427,
-      "seconds": 5.31
+      "mae": 3.342342389048338,
+      "seconds": 1.43
     },
     {
       "phase": "fine",
       "pct": 20,
       "thr": 1.2080000000000002,
-      "mae": 3.136455084198077,
-      "seconds": 5.6
+      "mae": 3.1548288077745434,
+      "seconds": 1.22
     },
     {
       "phase": "fine",
       "pct": 21,
       "thr": 1.3084,
-      "mae": 3.280050860510429,
-      "seconds": 6.43
+      "mae": 3.3810742120316024,
+      "seconds": 1.54
     },
     {
       "phase": "fine",
       "pct": 22,
       "thr": 1.4475999999999998,
-      "mae": 3.456417290306409,
-      "seconds": 6.27
+      "mae": 3.47235739048934,
+      "seconds": 1.34
     },
     {
       "phase": "fine",
       "pct": 23,
       "thr": 1.5964000000000007,
-      "mae": 3.595592419860681,
-      "seconds": 6.63
+      "mae": 3.5589988280882037,
+      "seconds": 1.51
     },
     {
       "phase": "fine",
       "pct": 24,
       "thr": 1.7687999999999995,
-      "mae": 3.6251145001255076,
-      "seconds": 5.74
+      "mae": 3.651859939674496,
+      "seconds": 1.54
     },
     {
       "phase": "fine",
       "pct": 25,
       "thr": 1.88,
-      "mae": 3.5745675035196145,
-      "seconds": 6.36
+      "mae": 3.543315726970593,
+      "seconds": 2.11
     },
     {
       "phase": "fine",
       "pct": 26,
       "thr": 1.9452,
-      "mae": 3.500299762847781,
-      "seconds": 6.21
+      "mae": 3.4965496519753927,
+      "seconds": 1.2
     },
     {
       "phase": "fine",
       "pct": 27,
       "thr": 2.5524,
-      "mae": 3.4362803116815885,
-      "seconds": 5.48
+      "mae": 3.3862597386417392,
+      "seconds": 2.34
     },
     {
       "phase": "fine",
       "pct": 28,
       "thr": 2.85,
-      "mae": 3.3484685898236037,
-      "seconds": 6.26
+      "mae": 3.367007832311948,
+      "seconds": 1.81
     }
   ]
 }
