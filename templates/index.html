@@ -15,10 +15,13 @@
     .btn:hover { opacity: 0.9; }
     table { width: 100%; border-collapse: collapse; }
     td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+    th { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
     .flash { padding: 10px 12px; border-radius: 10px; margin: 10px 0; }
     .success { background: #e9f7ef; border: 1px solid #b7e1c1; }
     .error { background: #fdecea; border: 1px solid #f5c6cb; }
     pre { white-space: pre-wrap; word-wrap: break-word; background: #f7f7f7; padding: 12px; border-radius: 10px; border: 1px solid #eee; }
+    details summary { cursor: pointer; }
+    .pill { display:inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 0.9rem; color:#444; }
   </style>
 </head>
 <body>
@@ -82,6 +85,62 @@
           shortwave_radiation_sum: {{ "%.2f"|format(prediction.get("shortwave_radiation_sum",0)|float) }}
         </div>
       </div>
+    </div>
+  {% endif %}
+
+  {% if elprices %}
+    <div class="card">
+      <h2>Elpris (spot)</h2>
+      <div class="muted">
+        Datum: {{ elprices["date"] }} • Elområde: <span class="pill">{{ elprices["area"] }}</span>
+        {% if elprices.get("interval_minutes") %}
+          • Intervall: {{ elprices["interval_minutes"] }} min ({{ elprices["count"] }} st)
+        {% endif %}
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div>
+          <div class="muted">Snitt (öre/kWh)</div>
+          <div class="big">{{ "%.2f"|format(elprices["avg_ore"]|float) }}</div>
+        </div>
+        <div class="muted">
+          Lägst: <strong>{{ "%.2f"|format(elprices["min_ore"]|float) }}</strong> öre/kWh<br>
+          Högst: <strong>{{ "%.2f"|format(elprices["max_ore"]|float) }}</strong> öre/kWh<br>
+          <span class="muted">Priser utan moms/skatt/påslag.</span>
+        </div>
+      </div>
+
+      <details style="margin-top:12px;">
+        <summary>Visa alla priser ({{ elprices["count"] }} rader)</summary>
+        <table style="margin-top:10px;">
+          <thead>
+            <tr>
+              <th>Tid</th>
+              <th>Pris (öre/kWh)</th>
+              <th>Pris (kr/kWh)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in elprices["series"] %}
+              <tr>
+                <td>
+                  {{ it["time_start"][11:16] }}–{{ it["time_end"][11:16] }}
+                </td>
+                <td>
+                  {{ "%.2f"|format((it["SEK_per_kWh"]|float) * 100.0) }}
+                </td>
+                <td class="muted">
+                  {{ "%.4f"|format(it["SEK_per_kWh"]|float) }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="muted" style="margin-top:10px;">
+          Källa: {{ elprices["source"] }} (spotpris). URL: {{ elprices["url"] }}
+        </div>
+      </details>
     </div>
   {% endif %}
 
