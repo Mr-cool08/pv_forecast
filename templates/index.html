@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PV Prognos – Masbo</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .muted { color: #666; font-size: 0.95rem; }
+    .big { font-size: 2rem; font-weight: 700; }
+    .btn { display: inline-block; padding: 10px 14px; border-radius: 10px; border: 1px solid #222; background: #222; color: #fff; cursor: pointer; }
+    .btn:hover { opacity: 0.9; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+    .flash { padding: 10px 12px; border-radius: 10px; margin: 10px 0; }
+    .success { background: #e9f7ef; border: 1px solid #b7e1c1; }
+    .error { background: #fdecea; border: 1px solid #f5c6cb; }
+    pre { white-space: pre-wrap; word-wrap: break-word; background: #f7f7f7; padding: 12px; border-radius: 10px; border: 1px solid #eee; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PV Prognos</h1>
+  <div class="muted">
+    Plats: {{ lat }}, {{ lon }} • Tidszon: {{ tz }}
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+        {% if cat == "success" %}
+          <div class="flash success">{{ msg }}</div>
+        {% elif cat == "error" %}
+          <div class="flash error">{{ msg }}</div>
+        {% elif cat == "log" %}
+          <div class="card">
+            <div class="muted">Logg (senaste rader):</div>
+            <pre>{{ msg }}</pre>
+          </div>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <form action="{{ url_for('refresh') }}" method="post">
+    <button class="btn" type="submit">Uppdatera prognos</button>
+  </form>
+
+  {% if error %}
+    <div class="card">
+      <div class="flash error">{{ error }}</div>
+    </div>
+  {% endif %}
+
+  {% if prediction %}
+    <div class="card">
+      <div class="muted">Predictionsfil: {{ prediction["__file__"] }}</div>
+      <div class="row">
+        <div>
+          <div class="muted">Datum (prognos avser)</div>
+          <div class="big">{{ prediction["date"] }}</div>
+        </div>
+        <div>
+          <div class="muted">Prognos produktion (kWh)</div>
+          <div class="big">
+            {% set v = prediction["kwh_pred"] %}
+            {{ "%.2f"|format(v|float) }}
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="muted">
+          Modell: {{ prediction.get("model_chosen","-") }}<br>
+          Threshold: {{ "%.2f"|format(prediction.get("threshold",0)|float) }}<br>
+          Kalibrering: {{ prediction.get("calibration_used","-") }}
+        </div>
+        <div class="muted">
+          shortwave_radiation_sum: {{ "%.2f"|format(prediction.get("shortwave_radiation_sum",0)|float) }}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if weather %}
+    <div class="card">
+      <h2>Väder imorgon (daily)</h2>
+      <div class="muted">Datum: {{ weather["date"] }}</div>
+      <table>
+        {% for var in weather_vars %}
+          <tr>
+            <td><strong>{{ var }}</strong></td>
+            <td>
+              {% set x = weather.get(var) %}
+              {% if x is not none %}
+                {{ "%.2f"|format(x|float) }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+      <div class="muted">
+        (Detta är Open-Meteo forecast för samma datum som predictionsfilen avser.)
+      </div>
+    </div>
+  {% endif %}
+</div>
+</body>
+</html>
