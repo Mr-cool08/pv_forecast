@@ -1,2 +1,0 @@
-date,target,kwh_pred,model_chosen,shortwave_radiation_sum,threshold,calibration_used
-2026-01-13,TOTAL,0.00,LOW,0.46,4.86,True
